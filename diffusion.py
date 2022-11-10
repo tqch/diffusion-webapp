@@ -42,7 +42,7 @@ class GaussianDiffusion:
     @staticmethod
     def _extract(arr, t, ndim):
         B = len(t)
-        out = torch.tensor(arr, dtype=torch.float32)[t]
+        out = torch.as_tensor(arr, dtype=torch.float32, device=t.device).gather(0, t)
         return out.reshape((B,) + (1,) * (ndim - 1))
 
     def q_mean_var(self, x_0, t):
@@ -117,7 +117,7 @@ class GaussianDiffusion:
         for ti in range(self.timesteps - 1, -1, -1):
             t.fill_(ti)
             x_t = self.p_sample_step(denoise_fn, x_t, t)
-        return x_t
+        return x_t.cpu()
 
     @torch.inference_mode()
     def p_sample_progressive(self, denoise_fn, noise, pred_freq=50):
@@ -203,7 +203,7 @@ class GeneralizedDiffusion(GaussianDiffusion):
         x_t = noise
         S = len(self.subsequence)
         subsequence = self.subsequence.to(noise.device)
-        _denoise_fn = lambda x, t: denoise_fn(x, subsequence[t])
+        _denoise_fn = lambda x, t: denoise_fn(x, subsequence.gather(0, t))
         t = torch.empty((noise.shape[0], ), dtype=torch.int64, device=noise.device)
         for ti in range(S - 1, -1, -1):
             t.fill_(ti)
@@ -217,7 +217,7 @@ class GeneralizedDiffusion(GaussianDiffusion):
         subsequence = self.subsequence.to(noise.device)
         idx = L = S // pred_freq
         preds = torch.zeros((L, ) + noise.shape, dtype=torch.float32)
-        _denoise_fn = lambda x, t: denoise_fn(x, subsequence[t])
+        _denoise_fn = lambda x, t: denoise_fn(x, subsequence.gather(0, t))
         t = torch.empty(noise.shape[0], dtype=torch.int64, device=noise.device)
         for ti in range(S - 1, -1, -1):
             t.fill_(ti)
@@ -226,10 +226,3 @@ class GeneralizedDiffusion(GaussianDiffusion):
                 idx -= 1
                 preds[idx] = pred.cpu()
         return x_t.cpu(), preds
-
-    @staticmethod
-    def from_ddpm(diffusion, eta, subsequence):
-        return GeneralizedDiffusion(**{
-            k: diffusion.__dict__.get(k, None)
-            for k in ["model_var_type", "loss_type"]
-        }, eta=eta, subsequence=subsequence)

@@ -30,4 +30,4 @@ To first-time users of Git LFS: please refer to [[official website]](https://git
 
 ## Demo
 
-![example](./demo/demo.gif)
+![example](./demo/demo.webp)

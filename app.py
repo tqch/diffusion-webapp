@@ -3,6 +3,7 @@ import io
 import os
 import math
 import torch
+import tempfile
 from diffusion import GeneralizedDiffusion
 from torchvision.utils import make_grid
 from string import ascii_letters, digits
@@ -14,7 +15,6 @@ from PIL import Image
 import cv2
 import uuid
 
-
 st.title("Diffusion Model Showcase")
 
 dataset = st.sidebar.radio(
@@ -24,7 +24,7 @@ if dataset == "CIFAR-10":
 else:
     padding = 2
 
-use_ddim = st.sidebar.checkbox("Use DDIM", value=True)
+use_ddim = st.sidebar.checkbox("Use DDIM", value=False)
 if use_ddim:
     schedule = st.sidebar.radio(
         "DDIM schedule", options=["linear", "quadratic"], index=0)
@@ -134,32 +134,31 @@ def update_idx():
     st.session_state["image_index"] = st.session_state.get("image_slider", 0)
 
 
+# noinspection PyUnresolvedReferences
 def get_bytes(arr):
     buffer = io.BytesIO()
     if isinstance(arr, (list, tuple)):
-        tmp_dir = "./tmp"
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir)
-        tmpfile = os.path.join(tmp_dir, f"{uuid.uuid4()}.mp4")
-        try:
-            writer = cv2.VideoWriter(
-                tmpfile, cv2.VideoWriter_fourcc(*"h264"), 24, arr[0].shape[:2])
-            for a in arr:
-                writer.write(cv2.cvtColor(a, cv2.COLOR_RGB2BGR))  # RGB -> BGR
-            writer.release()
-            with open(tmpfile, "rb") as f:
-                buffer = f.read()
-            os.remove(tmpfile)
-            ext = "mp4"
-        except:
-            ims = [Image.fromarray(a) for a in arr]
-            duration = max(42, 1000 // len(ims))
-            duration = [duration for _ in range(len(ims))]
-            duration[-1] = 1000
-            ims[0].save(
-                buffer, format="WEBP", duration=duration,
-                append_images=ims[1:], save_all=True, loop=0)
-            ext = "webp"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmpfile = os.path.join(tmp_dir, f"{uuid.uuid4()}.mp4")
+            try:
+                writer = cv2.VideoWriter(
+                    tmpfile, cv2.VideoWriter_fourcc(*"h264"), 24, arr[0].shape[:2])
+                for a in arr:
+                    writer.write(cv2.cvtColor(a, cv2.COLOR_RGB2BGR))  # RGB -> BGR
+                writer.release()
+                with open(tmpfile, "rb") as f:
+                    buffer = f.read()
+                os.remove(tmpfile)
+                ext = "mp4"
+            except:
+                ims = [Image.fromarray(a) for a in arr]
+                duration = max(42, 1000 // len(ims))
+                duration = [duration for _ in range(len(ims))]
+                duration[-1] = 1000
+                ims[0].save(
+                    buffer, format="WEBP", duration=duration,
+                    append_images=ims[1:], save_all=True, loop=0)
+                ext = "webp"
     else:
         Image.fromarray(arr).save(buffer, format="PNG")
         ext = "png"
